@@ -1,0 +1,107 @@
+
+
+body {
+ margin : 10px;
+ padding: 5px;
+ font-family: Apple Chancery, Zapf Chancery, cursive;
+ font-size: 14px;
+ //background-color: #F8F8F8;
+
+
+ }
+
+ #top {
+ padding:10px;
+ position: absolute;
+ height: 100px;
+ width: 96%;
+ top:100px;
+  border-style:solid;
+  border-color:grey;
+  border-width: 1px;
+ }
+
+ #left {
+ padding:10px;
+ position: absolute;
+ height:100%;
+ width:200px;
+ top:235px;
+border-style:solid;
+border-color:grey;
+border-width: 1px;
+ }
+
+ #main {
+ padding:10px;
+ position: absolute;
+ top: 235px;
+ left: 270px;
+ width: 500px;
+ border-style:solid;
+ border-color:grey;
+ border-width: 1px;
+ }
+
+ #right{
+ 	padding:10px;
+ position: absolute;
+ top: 235px;
+ left: 800px;
+ width: 426px;
+ border-style:solid;
+ border-color:grey;
+ border-width: 1px;
+ }
+
+ a{
+ text-decoration: none;
+ font-family: Textile, cursive;
+ font-size: 16px;
+ color: #B0B0B0;
+ background: inherit;
+color: #EC981F;
+ }
+
+ a:hover{
+ text-decoration: none;
+ font-family: Textile, cursive;
+ font-size: 16px;
+ color: #00FFFF;
+ background: inherit;
+color: #806B4D;
+ }
+
+
+ h1, h2, h3 {
+	font: bold 1em 'Trebuchet MS', Tahoma, Sans-serif;
+	text-transform: uppercase;
+	color: #555;
+}
+h1 { font-size: 1.7em; }
+h2 { font-size: 1.3em; }
+h3 { font-size: 1.2em; text-transform: none;}
+
+
+
+ textarea{
+ 	font-family: Lucida Console, Verdana, Sans-serif;
+ 	font-size:14px;
+ }
+
+ #logo{
+ 	font-family: Techno, Impact, sans-serif;
+ }
+
+ #status_message{
+ 	font-family:font-family: Techno, Impact, sans-serif;
+ 	color: #FF0000;
+ }
+
+ #friend_suggestor{
+ 	font-family:font-family: Techno, Impact, sans-serif;
+ 	color: #FF0000;
+ }
+
+ #socialize{
+ }

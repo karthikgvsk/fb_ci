@@ -1,0 +1,710 @@
+<?php
+
+class Login extends CI_Controller {
+    function Login()
+    {
+        parent::__construct();
+        $this->load->model(array('user_model'));
+        $this->load->model(array('message_model'));
+        $this->load->helper(array('form', 'url'));
+        $this->load->library('image_lib');
+    }
+	
+
+    function index()
+    {
+        $this->load->view('login_view');
+    }
+
+    function login_check()
+    {
+
+        $username = $this->input->post('username');
+        $password = $this->input->post('password');
+        $password = md5($password);
+        // getting the user id
+        $uid = $this->user_model->getid($username, $password);
+        // checking for errors
+        if ($uid == - 1) {
+            $data['error'] = - 1;
+            $this->load->view('login_view', $data);
+        } elseif ($uid == 0) {
+            $data['error'] = 0;
+            $this->load->view('login_view', $data);
+        } else {
+            $data['uid'] = $uid;
+            $uid = (int)$uid;
+            $this->session->set_userdata('uid', $uid);
+            $data['page_no'] = 0;
+            $this->load_home(0);
+        }
+    }
+
+    function redirect_to_home()
+    {
+        $fid = $this->session->userdata('friend_id');
+        if ($fid != null) {
+            $this->session->unset_userdata('friend_id');
+        }
+        $unknown_user_id = $this->session->userdata('unknown_user_id');
+        if ($unknown_user_id != null) {
+            $this->session->unset_userdata('unknown_user_id');
+        }
+        $this->load_home(0);
+    }
+
+    function set_message()
+    {
+        $uid = $this->session->userdata('uid');
+        $message = $this->input->post('new_message');
+        $result = $this->message_model->set_message($uid, $message);
+        if (!$result) {
+            die('message posting not successful');
+        } else {
+            $this->load_home(0);
+        }
+    }
+    // just some cloned functionality
+    function set_comment()
+    {
+        $uid = $this->session->userdata('uid');
+        $mid = $this->input->post('mid');
+        $mid = (int)$mid;
+        echo $mid;
+        echo "<br />";
+        echo $this->input->post('mid');
+
+        $comment = $this->input->post('new_comment');
+        $result1 = $this->message_model->set_comment($uid, $mid, $comment);
+        echo $comment;
+        echo gettype($comment);
+        if (!$result1) {
+            die('comment posting not successful');
+        } else {
+            $data['page_no'] = $this->input->post('page_no');
+            $this->load_home($data);
+        }
+    }
+
+    function load_home($page_number = 0)
+    {
+        //tags for top and recent searches
+        $this->load->library('taggly');
+        //!.CAN TAKE OFF CODE FOR COMMENTS!!,JUST THE NO  OF COMMENTS IS TO BE SENT FOR EACH MESSAGE
+
+        $fid = $this->session->userdata('friend_id');
+        if ($fid == null) {
+            $uid = $this->session->userdata('uid');
+        } else {
+            $uid = (int)$fid;
+        }
+
+        $unknown_user_id = $this->session->userdata('unknown_user_id');
+        if ($unknown_user_id == null) {
+            $uid = $this->session->userdata('uid');
+        } else {
+            $uid = (int)$unknown_user_id;
+        }
+			 
+			//setting the comment sent			 
+			 
+        if ($this->input->post('set_comment') == 'set_comment') {
+            $mid = $this->input->post('mid');
+            $mid = (int)$mid;
+            $comment = $this->input->post('new_comment');
+            $result1 = $this->message_model->set_comment($this->session->userdata('uid'), $mid, $comment);
+            echo $comment;
+            echo gettype($comment);
+            if (!$result1) {
+                die('comment posting not successful');
+            }
+        }
+
+        $this->load->library('pagination');
+        $messages_array = null;
+        $comments_array = null;
+        
+        // getting total ids - putting friend ids and user's into an array
+        $friend_id_array = $this->user_model->get_user_fid($uid);
+        if ($friend_id_array != null) {
+            $uid_array[] = $uid;
+            $total_id_array = array_merge($friend_id_array, $uid_array);
+        } else {
+            $total_id_array[] = $uid;
+        }
+
+        for($j = 0;$j < count($total_id_array);$j++) {
+            $total_id_array[$j] = (int)$total_id_array[$j];
+        }
+        // config for pagination
+        
+        $config['base_url'] = 'http://localhost/fb_ci/index.php/login/load_home/';
+        $config['total_rows'] = $this->message_model->get_message_number($total_id_array);
+        $config['per_page'] = '5';
+        $config['uri_segment'] = 3;
+        $this->pagination->initialize($config);
+        $limit = 5;
+        $offset = $page_number;
+        
+        // getting messages in an array
+        $messages = $this->message_model->get_messages($total_id_array, $limit, $offset);
+		
+        if ($messages != null) {
+            foreach($messages->result() as $row) {
+                $user = $this->user_model->get_user_by_id($row->uid);
+                $uid = $row->uid;
+                //sending code for profile pics
+                $img = '<img src=\"<?php echo base_url() . \"profile_pics/{$uid}.jpg\" ?>\" width = 50px />';
+                
+                $messages_array[] = array(
+                    'mid' => $row->id,
+                    'message' => $row->message,
+                    'uid' => $row->uid,
+                    'username' => $user->username,
+                    'user_pic' => $img
+                    );
+                $msg_id = $row->id;
+                $comments_for_this_message = $this->message_model->get_comments($msg_id);
+                if ($comments_for_this_message != null) {
+                    foreach($comments_for_this_message->result() as $row1) {
+                        $user = $this->user_model->get_user_by_id($row1->uid);
+                        $comments_array[$msg_id][] = array(
+                            'cid' => $row1->id,
+                            'mid' => $row1->mid,
+                            'uid' => $row1->uid,
+                            'username' => $user->username,
+                            'comment' => $row1->comment
+                            );
+                    }
+                } else {
+                    $comments_array[$msg_id] = null;
+                }
+            }
+        } else {
+            $messages_array = null;
+        }
+
+        $data['uid'] = $uid;
+        $data['messages_array'] = $messages_array;
+        $data['comments_array'] = $comments_array;
+        $data['page_number'] = $this->uri->segment(3);
+
+        if ($fid != null) {
+            $data['friend_profile'] = 1;
+            $data['unknown_user_profile'] = 0;
+            $data['fid'] = $this->session->userdata('friend_id');
+        } elseif ($unknown_user_id != null) {
+            $data['friend_profile'] = 0;
+            $data['unknown_user_profile'] = 1;
+            $data['unknown_user_id'] = $this->session->userdata('unknown_user_id');
+        } else {
+            $data['friend_profile'] = 0;
+            $data['unknown_user_profile'] = 0;
+        }
+        // get an array of friends
+        $fid = $this->session->userdata('friend_id');
+        if ($fid == null) {
+            $uid = (int)$this->session->userdata('uid');
+        } else {
+            $uid = (int)$fid;
+        }
+        // load a view
+        $friend_list_string = $this->user_model->get_friends($uid);
+
+        if ($friend_list_string != null) {
+            $friend_list_array = explode(',', $friend_list_string);
+
+            for($j = 0;$j < count($friend_list_array);$j++) {
+                $fid = $friend_list_array[$j];
+                $friend = $this->user_model->get_user_by_id($fid);
+                $list[] = array(
+                    'uid' => $uid,
+                    'fid' => $fid,
+                    'friend_name' => $friend->username
+                    );
+            }
+        } else {
+            $list = null;
+        }
+
+        $data['friend_list_array'] = $list;
+        // friend_suggestor(for user profile only)
+        if ($data['friend_profile'] == 0 && $data['unknown_user_profile'] == 0) {
+            $user_friends_list = $this->user_model->get_friends($uid);
+            $user_friends_array = explode(',', $user_friends_list);
+
+            $friend_list_string = $this->user_model->get_friends($uid);
+            if ($friend_list_string != null) {
+                $friend_list_array = explode(',', $friend_list_string);
+                for($j = 0;$j < count($friend_list_array);$j++) {
+                    $fid = $friend_list_array[$j];
+                    $friend_friends_string = $this->user_model->get_friends($fid);
+                    $friend_friends_array = explode(',', $friend_friends_string);
+                    $user_array[0] = $uid;
+                    $friend_friends_cleaned_array = array_diff($friend_friends_array, $user_array, $user_friends_array);
+
+                    if (count($friend_friends_cleaned_array) > 0) {
+                        foreach($friend_friends_cleaned_array as $row) {
+                            $ffca[] = $row;
+                        }
+                    } else {
+                        $ffca = null;
+                    }
+                    $friend_friends_array = $ffca;
+
+                    if ($friend_friends_array != null) {
+                        for($k = 0;$k < count($friend_friends_array);$k++) {
+                            $ffid = $friend_friends_array[$k];
+                            $ffid_friends_string = $this->user_model->get_friends($ffid);
+                            $ffid_friends_array = explode(',', $ffid_friends_string);
+                            $search_result = array_search($uid, $ffid_friends_array);
+                            if ($ffid != $uid && $search_result == false) {
+                                $reqd_array[] = $ffid;
+                            }
+                        }
+                    }
+                }
+
+                if (isset($reqd_array)) {
+                    for($p = 0;$p < count($reqd_array);$p++) {
+                        $ffid = $reqd_array[$p];
+                        $suggestor_friends_list = $this->user_model->get_friends($ffid);
+                        $suggestor_friends_array = explode(',', $suggestor_friends_list);
+                        $intersect_array = array_intersect($user_friends_array, $suggestor_friends_array);
+                        $count = count($intersect_array);
+                        $sorting_array[] = array('ffid' => $ffid, 'count' => $count);
+                    }
+
+                    foreach ($sorting_array as $key => $row) {
+                        $values_array[$key] = $row['count'];
+                    }
+
+                    $sort_result = array_multisort($values_array, SORT_DESC, $sorting_array);
+                    if ($sort_result) {
+                        if ($sorting_array[0] != null) {
+                            $sfid = $sorting_array[0]['ffid'];
+                            $suggested_user = $this->user_model->get_user_by_id($sfid);
+                            $username = $suggested_user->username;
+                            $data['friend_suggestor'] = array ('sfid' => $sfid , 'username' => $username);
+                        } else {
+                            $data['friend_suggestor'] = 0;
+                        }
+                    } else {
+                        $data['friend_suggestor'] = 1;
+                    }
+                } else {
+                    $data['friend_suggestor'] = 4;
+                }
+            } else {
+                $data['friend_suggestor'] = 2;
+            }
+        } else {
+            $data['friend_suggestor'] = 3;
+        }
+        
+        $this->db->from('search');
+        $this->db->order_by('time','DESC');
+        $this->db->limit(25);
+        $query = $this->db->get();
+        
+        if($query->num_rows() > 0){
+            foreach($query->result() as $row){
+                $tag_array[] = $row;
+            }
+        }else{
+            $tag_array = null;
+        }
+        
+        $searches = $tag_array;
+        if ($searches != null) {
+            for($k = 0;$k < count($searches);$k++) {
+                $search = $searches[$k];
+                $count = $search->count;
+                
+                $search_word = $search->search_word;
+                $tag_array[$k] = array($count, $search_word,base_url().'index.php/search/search_from_tags/' . $search_word);
+            }
+        } else {
+            $tag_array = null;
+        }
+        
+        if ($tag_array != null) {
+            $tags = $this->taggly->cloud($tag_array);
+        } else {
+            $tags = null;
+        }
+        $data['tags'] = $tags;
+
+        $this->load->view('header_view', $data);
+        $this->load->view('home', $data);
+        $this->load->view('footer_view');
+    }
+
+    function logout()
+    {
+        $this->session->sess_destroy();
+        $this->load->view('login_view');
+    }
+    
+    function refresh_captcha(){
+        $refresh = array('refresh_captcha' => 'yes');
+        $this->session->set_userdata($refresh);
+        $this->new_user();
+    }
+    
+    function load_new_user_view()
+    {
+        $this->load->helper('captcha');
+
+        $vals = array(
+            'img_path' => './captcha/',
+            'img_url' => base_url() . '/captcha/',
+            'font_path' => './path/to/fonts/texb.ttf',
+            'img_width' => '150',
+            'img_height' => 30,
+            'expiration' => 7200
+            );
+        $cap = create_captcha($vals);
+        $data['captcha'] = $cap;
+        $this->session->set_userdata('actual_captcha_word', $cap['word']);
+        $data['refresh_captcha'] = 0;
+        $this->load->view('new_user_view', $data);
+    }
+
+    function new_user()
+    {
+        $this->load->library('form_validation');
+        $this->load->helper('captcha');
+        
+        //for refreshing the captcha!
+        $refresh_captcha  = $this->input->post('refresh_captcha');
+        
+        $refresh_captcha = $this->session->userdata('refresh_captcha');
+        
+        if(isset($refresh_captcha) && $refresh_captcha == 'yes'){
+            $data['refresh_captcha'] = 1;
+            $str['refresh_captcha'] = 1;
+            $this->session->unset_userdata('refresh_captcha');
+        }else{
+            $data['refresh_captcha'] = 0;
+            $str['refresh_captcha'] = 0;
+        }
+
+        $actual_captcha_word = $this->session->userdata('actual_captcha_word');
+        $captcha_word_sent = $this->input->post('captcha_word_sent');
+
+        $this->form_validation->set_rules('username', 'Username', 'trim|required|max_length[12]|xss_clean');
+        $this->form_validation->set_rules('password', 'Password', 'trim|required|matches[confirm_password]|max_length[12]|xss_clean');
+        $this->form_validation->set_rules('confirm_password', 'Password Confirmation', 'trim|required|max_length[12]|xss_clean');
+        $this->form_validation->set_rules('first_name', 'First name', 'trim|required|min_length[5]|max_length[12]|xss_clean');
+        $this->form_validation->set_rules('last_name', 'Last name', 'trim|required|min_length[5]|max_length[12]|xss_clean');
+
+        if ($this->form_validation->run() == false) {
+            $vals = array(
+                'img_path' => './captcha/',
+                'img_url' => base_url() . '/captcha/',
+                'font_path' => './path/to/fonts/texb.ttf',
+                'img_width' => '150',
+                'img_height' => 30,
+                'expiration' => 7200
+                );
+            $cap = create_captcha($vals);
+            $data['captcha'] = $cap;
+            $this->session->set_userdata('actual_captcha_word', $cap['word']);
+            $this->load->view('new_user_view', $data);
+        } elseif ($captcha_word_sent == null || $captcha_word_sent != $actual_captcha_word) {
+            $data['captcha_error'] = "captcha word not set properly";
+
+            $vals = array(
+                'img_path' => './captcha/',
+                'img_url' => base_url() . '/captcha/',
+                'font_path' => './path/to/fonts/texb.ttf',
+                'img_width' => '150',
+                'img_height' => 30,
+                'expiration' => 7200
+                );
+            $cap = create_captcha($vals);
+            $data['captcha'] = $cap;
+            $this->session->set_userdata('actual_captcha_word', $cap['word']);
+            $this->load->view('new_user_view', $data);
+        } else {
+            $username = $this->input->post('username');
+            $password = $this->input->post('password');
+            $confirm_password = $this->input->post('confirm_password');
+            $first_name = $this->input->post('first_name');
+            $last_name = $this->input->post('last_name');
+
+            $result1 = $this->user_model->get_user($username);
+            if ($result1 > 0) {
+                $str['message'] = 'username already exists';
+                $str['username'] = $username;                
+                $this->load->view('new_user_view', $str);
+            } else {
+                $password = md5($password);
+
+                $result = $this->user_model->set_user($username, $password, $first_name, $last_name);
+                if ($result == true) {
+                    $new_user_id = $this->user_model->getid($username, $password);
+                    $this->session->set_userdata('uid', $new_user_id);
+                    $this->load->view('user_creation_success');
+                } else {
+                    $str['message'] = "user creation failed try again!";
+                    $this->load->view('new_user_view', $str);
+                }
+            }
+        }
+    }
+
+    function profile_pic_loading()
+    {
+        $config['upload_path'] = base_url().'profile_pics/';
+        $config['allowed_types'] = 'gif|jpg|png';
+        $config['max_size'] = '4096';
+        $config['max_width'] = '1024';
+        $config['max_height'] = '768';
+        $config['file_name'] = $this->session->userdata('uid') . ".jpg";
+        $config['overwrite'] = true;
+
+        $this->load->library('upload', $config);
+
+        if (! $this->upload->do_upload('profile_pic')) {
+            $error = array('error' => $this->upload->display_errors());
+
+            $this->load->view('user_creation_success', $error);
+        } else {
+            $data = array('upload_data' => $this->upload->data());
+
+            $this->load->view('profile_success', $data);
+        }
+    }
+
+    function go_to_friend($fid)
+    {
+        $fid = (int)$fid;
+        $this->session->set_userdata('friend_id', $fid);
+        $this->load_home(0);
+    }
+
+    function forgot_password()
+    {
+        $this->load->view('forgot_password_view');
+    }
+
+    function email_forgot_password()
+    {
+        $this->load->helper('email');
+        $email_address = $this->input->post('email_address');
+        $test = valid_email($email_address);
+        if (!$test) {
+            $data['error'] = 'Not a valid email address';
+            $this->load->view('forgot_password_view', $data);
+        } else {
+            $result = $this->user_model->get_user_by_email($email_address);
+            if ($result->num_rows() != 1) {
+                $data['error'] = "email id not registered for a user";
+                $this->load->view('forgot_password_view', $data);
+            } else {
+                $row = $result->row();
+                $username = $row->username;
+                $password = $row->password;
+                $message = anchor('login/change_password/' . $row->id, 'link to change yout ip address');
+                $subject = "username and password for your account in fb_ci";
+                $result1 = send_email($email_address, $subject, $message);
+                if ($result1) {
+                    echo "mail successfully sent";
+                } else {
+                    echo "mail sending failed";
+                }
+            }
+        }
+    }
+
+    function change_password($uid)
+    {
+        $this->session->set_userdata('uid', $uid);
+        $this->load->view('change_password_view');
+    }
+
+    function submitted_password()
+    {
+        $this->load->library('form_validation');
+
+        $this->form_validation->set_rules('password', 'Password', 'trim|required|matches[confirm_password]|max_length[12]|xss_clean');
+        $this->form_validation->set_rules('confirm_password', 'Password Confirmation', 'trim|required|max_length[12]|xss_clean');
+
+        if ($this->form_validation->run() == false) {
+            $this->load->view('new_user_view');
+        } else {
+            $password = $this->input->password('password');
+            $confirm_passsword = $this->input->confirm_password('confirm_passsword');
+            $uid = $this->session->userdata('uid');
+            $update = array('password' => $password);
+            $this->db->where('id', $uid);
+            $result = $this->db->update('user', $update);
+            if ($result) {
+                echo "password successfully changed";
+            } else {
+                echo "password changing failed";
+            }
+        }
+    }
+
+    function user_from_search($id)
+    {
+        $unknown_user_id = (int)$id;
+        $this->session->set_userdata('unknown_user_id', $unknown_user_id);
+        $this->load_home(0);
+    }
+
+    function show_comments($mid)
+    {
+        $mid = (int)$mid;
+        $message = $this->message_model->get_message($mid);
+        $uid = $message->uid;
+        $user = $this->user_model->get_user_by_id($uid);
+        $message_array = array(
+            'mid' => $message->id,
+            'uid' => $message->uid,
+            'username' => $user->username,
+            'message' => $message->message
+            );
+        $data['message_array'] = $message_array;
+
+        $comments = $this->message_model->get_comments($mid);
+        if ($comments->num_rows() > 0) {
+            foreach($comments->result() as $row) {
+                $uid = $row->uid;
+                $user = $this->user_model->get_user_by_id($uid);
+                $comments_array[] = array(
+                    'cid' => $row->id,
+                    'mid' => $row->mid,
+                    'uid' => $row->uid,
+                    'username' => $user->username,
+                    'comment' => $row->comment
+                    );
+            }
+        } else {
+            $comments_array = null;
+        }
+        $data['comments_array'] = $comments_array;
+
+        $fid = $this->session->userdata('friend_id');
+        $unknown_user_id = $this->session->userdata('unknown_user_id');
+
+        if ($fid != null) {
+            $data['friend_profile'] = 1;
+            $data['unknown_user_profile'] = 0;
+            $data['fid'] = $this->session->userdata('friend_id');
+        } elseif ($unknown_user_id != null) {
+            $data['friend_profile'] = 0;
+            $data['unknown_user_profile'] = 1;
+            $data['unknown_user_id'] = $this->session->userdata('unknown_user_id');
+        } else {
+            $data['friend_profile'] = 0;
+            $data['unknown_user_profile'] = 0;
+        }
+
+        $this->load->view('show_comments', $data);
+    }
+
+
+    function post_comment(){
+        $uid = $this->session->userdata['uid'];
+        $mid = $this->input->post('mid');
+        $comment = $this->input->post('new_comment');
+        $result = $this->message_model->set_comment($uid,$mid,$comment);
+        if($result){
+            $this->show_comments($mid);
+        }else{
+            die('error in posting comment');
+        }
+    }
+
+    function profile_view(){
+        $uid = $this->session->userdata('uid');
+        $profile_change = $this->session->userdata('profile_change');
+        if(isset($profile_change)){
+            $data['profile_change'] = $profile_change;
+            $this->session->unset_userdata('profile_change');
+        }
+        
+        $data['uid'] = $uid;
+        
+        $user = $this->user_model->get_user_by_id($uid);
+        $data['user'] = $user;
+        
+        $data['friend_profile'] =0;
+        $data['unknown_user_profile'] = 0;
+        $this->load->view('header_absolute',$data);
+        $this->load->view('profile_edit_view',$data);
+    }
+    
+    function edit_profile(){
+        $this->load->library('form_validation');
+        
+        $uid = $this->session->userdata('uid');
+        $data['uid'] = $uid;
+        
+        $username = $this->input->post('username');
+        $password = $this->input->post('password');
+        $first_name = $this->input->post('first_name');
+        $last_name = $this->input->post('last_name');
+        //matches[confirm_password]| is an attribute in password checking
+        //another attribute removed is 'required'
+        
+        $this->form_validation->set_rules('username', 'Username', 'trim|max_length[12]|xss_clean');
+        $this->form_validation->set_rules('password', 'Password', 'trim|max_length[12]|xss_clean');
+        //$this->form_validation->set_rules('confirm_password', 'Password Confirmation', 'trim|required|max_length[12]|xss_clean');
+        $this->form_validation->set_rules('first_name', 'First name', 'trim|min_length[5]|max_length[12]|xss_clean');
+        $this->form_validation->set_rules('last_name', 'Last name', 'trim|min_length[5]|max_length[12]|xss_clean');
+        
+        if ($this->form_validation->run() == false) {
+            $data['valid_errors'] = 1;
+            $data['friend_profile'] = 0;
+            $data['unknown_user_profile'] = 0;
+            
+            $user = $this->user_model->get_user_by_id($uid);
+            $data['user'] = $user;
+            
+            $this->load->view('header_absolute' , $data);
+            $this->load->view('profile_edit_view' , $data);
+            
+        }elseif($username == null  && $password == null && $first_name == null && $last_name == null){
+            $this->profile_view();
+        }
+        else{
+            $username = $this->input->post('username');
+            $password = $this->input->post('password');
+            $first_name = $this->input->post('first_name');
+            $last_name = $this->input->post('last_name');
+            
+            $this->db->where('id' , $uid);
+            if($username != null){
+                $update['username'] = $username;
+            }
+            if($password !=null){
+                $update['password'] = md5($password);
+            }
+            if($first_name != null){
+                $update['first_name'] = $first_name;
+            }
+            if($last_name!=null){
+                $update['last_name'] = $last_name;
+            }
+            
+            $result = $this->db->update('user',$update);
+            if($result){
+                $this->session->set_userdata('profile_change','changes made successfully');
+                $this->profile_view();
+            }else{
+                $this->session->set_userdata('profile_change','unable to make changes');
+                $this->profile_view();
+            }
+        }
+        
+        
+        
+    }
+}
+
+?>
